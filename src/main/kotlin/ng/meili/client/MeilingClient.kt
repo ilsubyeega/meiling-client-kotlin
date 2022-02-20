@@ -1,11 +1,7 @@
 package ng.meili.client
 
-import io.ktor.client.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import ng.meili.client.json.MeilingJsonTokenResponse
@@ -32,32 +28,26 @@ class MeilingClient(var endpointUrl: String = "https://meiling.stella-api.dev") 
     }
 
     suspend fun exchangeCodeCredentials(
-        clientCred: MeilingClientCredentials, code: String, challenge: MeilingPKCEChallenge?
+        clientCred: MeilingClientCredentials, code: String, challenge: MeilingPKCEChallenge? = null
     ): MeilingCredentials {
-        val client = HttpClient {
-            expectSuccess = true
-        }
+        val client = defaultHttpClient()
 
         try {
-            val res : String = client.post("{$clientCred.apiUrl}/oauth2/token") {
-                contentType(ContentType.Application.Json)
-                userAgent("MeiliNG/Kotlin")
-
-                body = formData {
-                    append("client_id", clientCred.clientId)
-                    append("client_secret", clientCred.clientSecret)
-                    append("grant_type", "authorization_code")
-                    append("code", code)
-                    if (challenge != null) {
-                        TODO("Add challenge headers here")
-                    }
-                }
+            val res: String = client.post("$endpointUrl/v1/oauth2/token") {
+                body = mapOf(
+                    "client_id" to clientCred.clientId,
+                    "client_secret" to clientCred.clientSecret,
+                    "grant_type" to "authorization_code",
+                    "code" to code
+                    // TODO: Add challenge params
+                )
             }
 
             val json = Json.decodeFromString<MeilingJsonTokenResponse>(res)
 
+            // TODO: Add more params to MeilingCredentials
             return MeilingCredentials(
-                json.accessToken, json.refreshToken, json.expiresIn, clientCred
+                json.accessToken, json.refreshToken, json.expiresIn, endpointUrl, clientCred
             )
 
         } catch (e: ClientRequestException) {

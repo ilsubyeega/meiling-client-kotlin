@@ -1,10 +1,7 @@
 package ng.meili.client
 
-import io.ktor.client.*
 import io.ktor.client.features.*
 import io.ktor.client.request.*
-import io.ktor.client.request.forms.*
-import io.ktor.http.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import ng.meili.client.json.MeilingJsonTokenResponse
@@ -18,17 +15,22 @@ class MeilingCredentials {
     var refreshToken: String? = null
         private set
 
+    var endpointUrl: String
+        private set
+
     private var clientCred: MeilingClientCredentials
 
     internal constructor(
         accessToken: String,
         refreshToken: String?,
         expiresIn: Date,
+        endpointUrl: String,
         clientCred: MeilingClientCredentials
     ) {
         this.accessToken = accessToken
-        this.expiresIn = expiresIn
         this.refreshToken = refreshToken
+        this.expiresIn = expiresIn
+        this.endpointUrl = endpointUrl
         this.clientCred = clientCred
     }
 
@@ -36,13 +38,16 @@ class MeilingCredentials {
         accessToken: String,
         refreshToken: String?,
         expiresIn: Int,
+        endpointUrl: String,
         clientCred: MeilingClientCredentials
     ) {
         this.accessToken = accessToken
-        this.expiresIn = Date(Date().time + expiresIn * 1000)
         this.refreshToken = refreshToken
+        this.expiresIn = Date(Date().time + expiresIn * 1000)
+        this.endpointUrl = endpointUrl
         this.clientCred = clientCred
     }
+
 
     fun isExpired(): Boolean {
         return Date().before(expiresIn)
@@ -51,22 +56,16 @@ class MeilingCredentials {
     suspend fun refresh() {
         require(refreshToken != null) { "Refresh token is null" }
 
-        val client = HttpClient {
-            expectSuccess = true
-        }
+        val client = defaultHttpClient()
 
         try {
-            val res: String = client.post("{$clientCred.apiUrl}/oauth/token") {
-                contentType(ContentType.Application.Json)
-                userAgent("MeiliNG/Kotlin")
-
-                body =
-                    formData {
-                        append("grant_type", "refresh_token")
-                        append("refresh_token", refreshToken!!)
-                        append("client_id", clientCred.clientId)
-                        append("client_secret", clientCred.clientSecret)
-                    }
+            val res: String = client.post("$endpointUrl/v1/oauth2/token") {
+                body = mapOf(
+                    "grant_type" to "refresh_token",
+                    "refresh_token" to refreshToken!!,
+                    "client_id" to clientCred.clientId,
+                    "client_secret" to clientCred.clientSecret
+                )
             }
 
             val json = Json.decodeFromString<MeilingJsonTokenResponse>(res)
@@ -87,4 +86,20 @@ class MeilingCredentials {
     }
 
 
+    suspend fun getCurrentUser() {
+        TODO("not implemented")
+        /*
+        val client = defaultHttpClient()
+        val res: String = client.get("{$clientCred.apiUrl}/v1/meiling/users") {
+            headers {
+                append(HttpHeaders.Authorization, "Bearer $accessToken")
+            }
+        }
+        */
+    }
+
+
+    override fun toString(): String {
+        return "MeilingCredentials(accessToken='$accessToken', expiresIn=$expiresIn, refreshToken=$refreshToken, endpointUrl='$endpointUrl', clientCred=$clientCred)"
+    }
 }
